@@ -175,8 +175,9 @@ try {
   assert.equal(await evaluate('document.getElementById("app").classList.contains("asleep")'), true);
   await message({ type: 'screen', on: true });
   await message({ type: 'bye' });
-  await capture('offline');
-  assert.equal(await evaluate('document.getElementById("app").classList.contains("offline")'), true);
+  await capture('bridge-gone');
+  assert.equal(await evaluate('document.getElementById("app").classList.contains("offline")'), false, 'A dropped bridge leaves the clock up');
+  assert.equal(await evaluate('document.getElementById("app").classList.contains("asleep")'), false, 'A dropped bridge does not blank the screen');
   assert.deepEqual(errors, [], 'No runtime exceptions');
   console.log('Device checks passed. Screenshots: ' + output);
 } finally {

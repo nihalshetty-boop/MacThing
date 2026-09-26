@@ -1,11 +1,32 @@
 # MacThing
 
-Turns a Spotify Car Thing into a desk display and volume knob for macOS.
-It has four screens: Now Playing, Calendar, Weather and Clock.
+This fork keeps [Sean Curran's MacThing](https://github.com/srcurran/MacThing) (MIT) as the Car Thing screen. The clock runs with no Mac attached. The page takes the time from the device it is running on. It does not wait for Mac tick messages, and it does not show "Waiting for your Mac" or go black when the Mac bridge is quiet.
 
-No reflashing: this runs on the community firmware you already have, replaces the web app the
-device shows, and can be undone with one command. Nothing is installed on the device that a
-`npm run restore-device` doesn't put back.
+Weather that stays on the device, and a Mac connection that works with the firmware in the sibling `mira-firmware` repo, are not done yet. The original bridge still sends Now Playing, artwork, favorites, and calendar, but only over ADB to community firmware such as Thing Labs or DeskThing. The image that `mira-firmware` builds has no `adb`.
+
+## Try the clock on a Mac
+
+```bash
+npm ci
+npm run build:ui
+```
+
+Open `dist/ui/index.html` in Chrome. Leave `npm start` off. The analog clock should show local time and keep moving, with no waiting message. Press `4` for the full clock screen.
+
+## Flash it onto a Car Thing
+
+The page is packed into a firmware image by the sibling [`mira-firmware`](../mira-firmware) repo. That repo's Image build action publishes `mira_firmware_v1.1.0.zip` on each run. Flash that zip with [Terbium](https://terbium.app/) in Chrome:
+
+1. Hold buttons **1** and **4** while you plug in a data USB-C cable. A black screen means flash mode.
+2. Follow Terbium until the firmware step. On a Mac, do not install the Windows driver.
+3. Choose **Local archive**, not **Mira**. Mira on that list is a Spotify image. Select the zip. Do not unzip it.
+4. Wait until it finishes, then unplug and plug the cable back in.
+
+Flashing wipes the device. First boot should be this clock, not a Spotify sign-in. If a flash stalls, start again from step 1.
+
+The rest of this file describes the original Mac bridge. That path still uses ADB on an already-unlocked Car Thing. `npm run setup-device` also installs a sleep watchdog that turns the backlight off when the Mac goes quiet. Skip that if the screen should stay on.
+
+The original project is a desk display and volume knob for macOS, with Now Playing, Calendar, Weather, and Clock.
 
 https://github.com/user-attachments/assets/f47f9c9d-7ae7-4c24-92b9-900ebb423bcd
 
@@ -39,7 +60,7 @@ _Weather's Today and This Week views, from the same fixture data (rendered in Ch
 
 **Meeting alerts** (off by default; turn them on in Settings): at a timed event's alert, a card with its title, start and end time and location covers whatever screen is up. "Event's alert" uses the alert set on the event in Calendar (only alerts within an hour of the start; events without one are skipped); or pick a fixed 1, 5 or 10 minutes before every event. It stays until you press any button or the knob — that press only dismisses it — or until five minutes after the meeting starts (sooner if the meeting ends first). It shows one meeting at a time: when meetings overlap, the card shows the first, and one press dismisses them all. Turning the knob still sets the volume.
 
-**Sleep:** the Car Thing's screen turns off whenever your Mac's display sleeps, when you hold the settings button, and — this part runs on the device itself — about a minute and a half after the Mac stops talking to it at all: shut down, unplugged from the Mac but still powered, or just the bridge stopped. Press any button or turn the knob to wake it; while the Mac is away it stays lit for 20 seconds, and while the Mac is only asleep, for a minute. That first input only wakes it.
+**Sleep:** holding the settings button still turns the screen off until the next press. This fork's page does not go black just because the Mac bridge stopped. The original `device/sleepd.sh` watchdog, installed by `npm run setup-device`, still does that on ADB firmware. The Mac's own display sleep and lock behavior below still belongs to the bridge.
 
 **Lock:** while your Mac is locked — the lock screen, or switched to another account — the screen stays off and no button wakes it. It comes back when you log in.
 
@@ -61,7 +82,7 @@ Nothing is required for the device to work: Now Playing and the clock need no pe
 | Clock                                     | works; the event line stays blank until Calendar is allowed | —                                              |
 | Back button (favorite)                    | toast: "Allow musicctl to control Music"                    | allow Automation for musicctl                  |
 | Knob on an output with no software volume | "No volume control on <device>"                             | use an output that has one                     |
-| Bridge not running                        | "Waiting for your Mac"                                      | start it, or `npm run install-agent`           |
+| Bridge not running                        | the clock stays up; Now Playing stays on the idle clock    | start the bridge only when you want Mac data   |
 
 ## What you need
 
@@ -91,7 +112,7 @@ The first time the Weather and Calendar screens load, macOS asks whether **Car T
 
 ## Launching
 
-The Car Thing is only a display. The work happens in the **bridge**, a small Node program on your Mac (`bridge/main.js`). It reads Now Playing and the volume, and drives the Car Thing over USB. The Car Thing shows "Waiting for your Mac" whenever the bridge isn't running.
+On community firmware with ADB, the **bridge** (`bridge/main.js`) reads Now Playing and the volume on the Mac and drives the Car Thing over USB. This fork's page keeps the clock when that bridge is not running.
 
 ### Automatically at login (recommended)
 
@@ -330,6 +351,7 @@ grabs whatever is on screen now.
 
 ## Credits
 
+- [Sean Curran](https://github.com/srcurran), author of [MacThing](https://github.com/srcurran/MacThing). This fork keeps that MIT project and its copyright notice in [LICENSE](LICENSE).
 - The Car Thing community — [Thing Labs](https://github.com/thinglabsoss) and
   [DeskThing](https://github.com/ItsRiprod/DeskThing) — for the firmware that makes any of this
   possible, and for working out ADB access on the device in the first place.

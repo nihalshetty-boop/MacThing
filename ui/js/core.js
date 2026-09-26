@@ -1,4 +1,4 @@
-/* Shared runtime for every screen: the channel to the Mac, the Mac's clock, screen switching,
+/* Shared runtime for every screen: the channel to the Mac, the device clock, screen switching,
  * hardware input and the volume readout. Screens register with CT.screen(name) and listen for
  * bridge messages with CT.on(type, fn).
  *
@@ -48,7 +48,6 @@ export function initializeRuntime(state) {
     if (msg.type === 'bye') return setConnected(false);
     setConnected(true);
     if (msg.type === 'config') { CT.config = msg.config; gotConfig = true; restoreDevScreen(); }
-    else if (msg.type === 'tick') { syncClock(msg.now - Date.now()); clock.tz = msg.tzMinutes || 0; }
     else if (msg.type === 'settings') state.settings = msg.settings;
     else if (msg.type === 'appearance') macDark = msg.dark;
     if (msg.type === 'settings' || msg.type === 'appearance') applyTheme();
@@ -63,34 +62,24 @@ export function initializeRuntime(state) {
   }
   CT.applyTheme = applyTheme;
 
-  var offlineSince = 0; // when the Mac was last seen; 0 means "not since this page loaded"
   function setConnected(on) {
-    if (on !== connected) offlineSince = on ? 0 : performance.now();
     connected = on;
-    state.offline = !on;
   }
 
-  // ---- Time (the device clock is never set, so everything uses the Mac's) -------------
+  // ---- Time (the device clock; Mac tick messages do not set it) -----------------------
 
-  var clock = { offset: 0, tz: 0 };
-  CT.now = function () { return Date.now() + clock.offset; };
-  // Each tick reaches the device a little late, and by a different amount each time, so taking
-  // every one as-is makes the clock jump back and forth by that much every two seconds — enough
-  // for a countdown to show some seconds twice. A late tick only ever makes the Mac look behind,
-  // so keep the least-delayed reading of the last fifteen (half a minute, which still follows
-  // the Mac if its clock is changed).
-  var offsets = [];
-  function syncClock(offset) {
-    offsets.push(offset);
-    if (offsets.length > 15) offsets.shift();
-    clock.offset = Math.max.apply(null, offsets);
+  CT.now = function () { return Date.now(); };
+  /** Minutes east of UTC. An explicit zone wins; otherwise the device zone at that instant. */
+  function zoneMinutes(ms, tzMinutes) {
+    if (tzMinutes != null) return tzMinutes;
+    return -new Date(ms).getTimezoneOffset();
   }
   CT.DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   CT.MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-  /** Calendar fields of epoch ms in a timezone (minutes east of UTC; defaults to the Mac's). */
+  /** Calendar fields of epoch ms in a timezone (minutes east of UTC; defaults to the device's). */
   CT.parts = function (ms, tzMinutes) {
-    var d = new Date(ms + (tzMinutes == null ? clock.tz : tzMinutes) * 60000);
+    var d = new Date(ms + zoneMinutes(ms, tzMinutes) * 60000);
     return {
       year: d.getUTCFullYear(), month: d.getUTCMonth(), date: d.getUTCDate(), day: d.getUTCDay(),
       hours: d.getUTCHours(), minutes: d.getUTCMinutes(), seconds: d.getUTCSeconds()
@@ -98,7 +87,7 @@ export function initializeRuntime(state) {
   };
   /** Days since the epoch in a timezone — for "is this today / tomorrow". */
   CT.dayNumber = function (ms, tzMinutes) {
-    return Math.floor((ms + (tzMinutes == null ? clock.tz : tzMinutes) * 60000) / 86400000);
+    return Math.floor((ms + zoneMinutes(ms, tzMinutes) * 60000) / 86400000);
   };
   /** {time: '4:07', ampm: 'PM'} or {time: '16:07', ampm: ''}, following the 12/24-hour setting. */
   CT.clockText = function (p) {
@@ -116,7 +105,7 @@ export function initializeRuntime(state) {
     return (h % 12 || 12) + (h < 12 ? 'AM' : 'PM');
   };
 
-  // A shared once-a-second tick, aligned to the Mac's second boundary.
+  // A shared once-a-second tick, aligned to the device clock's second boundary.
   var secondFns = [];
   CT.onSecond = function (fn) { secondFns.push(fn); };
   (function secondLoop() {
@@ -209,8 +198,7 @@ export function initializeRuntime(state) {
 
   // ---- Screen sleep ----------------------------------------------------------------------
   // The Mac turns the backlight off when its display sleeps, and when the sleep button is held.
-  // When the Mac stops talking to us altogether the device does it for itself (device/sleepd.sh)
-  // and we go black here to match. While dark, the first button or knob input only wakes us.
+  // A missing Mac bridge leaves the screen on. While dark, the first button or knob input only wakes us.
 
   CT.asleep = false;
   function setAsleep(on) {
@@ -228,7 +216,6 @@ export function initializeRuntime(state) {
   function wakeInstead() {
     if (!CT.asleep) return false;
     CT.send({ type: 'wake' });
-    offlineSince = performance.now();
     if (!connected) setAsleep(false); // no Mac to turn the backlight back on for us
     return true;
   }
@@ -435,10 +422,6 @@ export function initializeRuntime(state) {
   setInterval(function () {
     if (connected && performance.now() - lastMsgAt > 6500) setConnected(false);
     if (!connected || !gotConfig) CT.send({ type: 'hello' }); // ask the bridge for full state
-    // The Mac is gone, so nothing will send us a screen message: go dark on our own. The device's
-    // own watchdog (device/sleepd.sh) kills the backlight at the same point; this just means the
-    // panel shows black rather than "Waiting for your Mac" even without it installed.
-    if (!connected && !CT.asleep && performance.now() - offlineSince > (CT.config.offlineSleepMs || 90000)) setAsleep(true);
   }, 1000);
 
   // Runs after every screen script has registered.

@@ -2,7 +2,7 @@ import { reactive, ref, computed, watch } from 'vue';
 import { initializeRuntime } from '../js/core.js';
 
 export const state = reactive({
-  current: 'nowplaying', leaving: '', offline: true, asleep: false, light: false,
+  current: 'nowplaying', leaving: '', offline: false, asleep: false, light: false,
   settings: { theme: 'dark', units: 'F', clock24h: false, clockFace: 'analog', meetingAlert: 0, location: { mode: 'auto' } },
   now: Date.now(), np: { active: false }, npAt: 0, artwork: null,
   weather: { status: 'loading' }, calendar: { status: 'loading' },
