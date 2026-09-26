@@ -65,7 +65,7 @@ export class CDP extends EventEmitter {
   }
 }
 
-export async function listTargets(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(2000) });
+export async function listTargets(port, host = '127.0.0.1') {
+  const res = await fetch(`http://${host}:${port}/json/list`, { signal: AbortSignal.timeout(2000) });
   return res.json();
 }

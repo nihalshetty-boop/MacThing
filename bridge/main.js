@@ -10,6 +10,7 @@ import path from 'node:path';
 import { Volume } from './audio/volume.js';
 import { config, paths } from './config.js';
 import { listCarThings, listDevices, onUsbBus, restartServer, trackDevices } from './device/adb.js';
+import { listTargets } from './device/cdp.js';
 import { DeviceLink } from './device/link.js';
 import { log } from './log.js';
 import { AppInfo, kindOf } from './nowplaying/apps.js';
@@ -290,6 +291,7 @@ async function retryWeather(quiet) {
 // treat a device-shaped silence as a stale server rather than an absent device.
 let lastSeen = Date.now();
 let lastServerRestart = 0;
+let usbHinted = false;
 
 async function refreshDevices() {
   let all;
@@ -312,15 +314,33 @@ async function refreshDevices() {
       if (devices.length) log.info('[adb] the server had gone stale; the device was there all along');
     }
   }
+  if (!devices.length) {
+    const usb = await usbDevice();
+    if (usb) devices = [usb];
+    else if (!usbHinted && (await onUsbBus())) {
+      usbHinted = true;
+      log.info(`[device] Car Thing is on USB but ${config.usbHost}:${config.usbCdpPort} is not reachable. Give the Mac's USB interface 172.16.42.1, and flash an image whose Chromium listens on that port.`);
+    }
+  } else usbHinted = false;
   if (devices.length) lastSeen = Date.now();
 
   if (link && !devices.some((d) => d.serial === link.serial)) link.close();
-  if (!link && !connecting && devices.length) await connect(devices[0].serial);
+  if (!link && !connecting && devices.length) await connect(devices[0]);
 }
 
-async function connect(serial) {
+async function usbDevice() {
+  try {
+    const pages = await listTargets(config.usbCdpPort, config.usbHost);
+    if (!pages.some((p) => p.type === 'page')) return null;
+    return { serial: `usb:${config.usbHost}`, host: config.usbHost };
+  } catch {
+    return null;
+  }
+}
+
+async function connect(device) {
   connecting = true;
-  const l = new DeviceLink(serial);
+  const l = new DeviceLink(device.serial, { host: device.host });
   l.on('ready', () => pushAll(l));
   l.on('message', onDeviceMessage);
   l.on('close', () => {
@@ -331,7 +351,7 @@ async function connect(serial) {
   });
   link = l;
   try {
-    log.info(`[device] connecting to ${serial}…`);
+    log.info(`[device] connecting to ${device.serial}…`);
     await l.connect();
     log.info('[device] connected');
     screenOn = null;

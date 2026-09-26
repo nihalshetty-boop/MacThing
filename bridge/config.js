@@ -15,6 +15,10 @@ export const config = {
   // Host port that `adb forward` maps to the Car Thing's Chromium devtools port (2222).
   // NOTE: never use `adb reverse` with this firmware — it crashes adbd and drops USB until a reboot.
   cdpPort: Number(process.env.CARTHING_CDP_PORT || 22222),
+  // The firmware image has no adbd. Chromium listens on this address over the USB gadget
+  // (device 172.16.42.2, Mac 172.16.42.1).
+  usbHost: process.env.CARTHING_USB_HOST || '172.16.42.2',
+  usbCdpPort: Number(process.env.CARTHING_USB_CDP_PORT || 2222),
 
   // Where our files live on the device. /var/lib is the persistent "settings" partition,
   // so updates never need the read-only rootfs remounted.

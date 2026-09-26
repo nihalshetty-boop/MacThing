@@ -26,9 +26,10 @@ const sleepConf = () => ({
  * Events: 'ready' (page loaded and wants full state), 'message' (from page), 'close'.
  */
 export class DeviceLink extends EventEmitter {
-  constructor(serial) {
+  constructor(serial, { host = null } = {}) {
     super();
     this.serial = serial;
+    this.host = host;
     this.cdp = null;
     this.closed = false;
     this.sleepd = false; // is the device-side sleep watchdog installed?
@@ -36,22 +37,30 @@ export class DeviceLink extends EventEmitter {
   }
 
   async connect() {
-    await adb(['forward', `tcp:${config.cdpPort}`, 'tcp:2222'], { serial: this.serial });
-    const sync = await syncUi(this.serial, paths.ui, config.deviceUiDir);
-    if (sync.changed) log.info(`[device] UI deployed (${sync.version})`);
-    this.uiVersion = sync.version;
+    let reload = false;
+    if (this.host) {
+      log.info(`[device] USB ${this.host}:${config.usbCdpPort} — page is already on the device`);
+      this.pageUrl = 'http://localhost:80/';
+      this.uiVersion = 'firmware';
+    } else {
+      await adb(['forward', `tcp:${config.cdpPort}`, 'tcp:2222'], { serial: this.serial });
+      const sync = await syncUi(this.serial, paths.ui, config.deviceUiDir);
+      if (sync.changed) log.info(`[device] UI deployed (${sync.version})`);
+      this.uiVersion = sync.version;
+      reload = sync.changed;
 
-    const sleepd = await syncSleepd(this.serial, paths.sleepd, config.deviceDir, sleepConf()).catch((err) => {
-      log.warn('[device] sleep watchdog:', err.message);
-      return { installed: false, changed: false };
-    });
-    this.sleepd = sleepd.installed;
-    if (sleepd.changed) log.info('[device] sleep watchdog updated');
-    else if (!sleepd.installed) log.warn('[device] no sleep watchdog — run `npm run setup-device` so the screen sleeps when the Mac is off');
+      const sleepd = await syncSleepd(this.serial, paths.sleepd, config.deviceDir, sleepConf()).catch((err) => {
+        log.warn('[device] sleep watchdog:', err.message);
+        return { installed: false, changed: false };
+      });
+      this.sleepd = sleepd.installed;
+      if (sleepd.changed) log.info('[device] sleep watchdog updated');
+      else if (!sleepd.installed) log.warn('[device] no sleep watchdog — run `npm run setup-device` so the screen sleeps when the Mac is off');
 
-    const installed = await isBootInstalled(this.serial, config.deviceUiDir);
-    this.pageUrl = installed ? config.deviceBootUrl : `file://${config.deviceUiDir}/index.html`;
-    if (!installed) log.warn('[device] boot web app not pointed at our UI yet — run `npm run setup-device` so it survives reboots');
+      const installed = await isBootInstalled(this.serial, config.deviceUiDir);
+      this.pageUrl = installed ? config.deviceBootUrl : `file://${config.deviceUiDir}/index.html`;
+      if (!installed) log.warn('[device] boot web app not pointed at our UI yet — run `npm run setup-device` so it survives reboots');
+    }
 
     const target = await this.#waitForPage();
     const cdp = await CDP.connect(target.webSocketDebuggerUrl);
@@ -73,10 +82,12 @@ export class DeviceLink extends EventEmitter {
     await cdp.send('Page.enable');
     await cdp.send('Runtime.addBinding', { name: BINDING }).catch((e) => log.warn('[device] addBinding failed, using console channel', e.message));
 
-    if (target.url !== this.pageUrl) {
+    const here = (target.url || '').replace(/\/$/, '');
+    const want = (this.pageUrl || '').replace(/\/$/, '');
+    if (here !== want) {
       log.info(`[device] opening UI (was ${target.url})`);
       await cdp.send('Page.navigate', { url: this.pageUrl });
-    } else if (sync.changed) {
+    } else if (reload) {
       await this.reload();
     } else {
       this.emit('ready'); // our UI is already up; it just needs state
@@ -85,11 +96,18 @@ export class DeviceLink extends EventEmitter {
 
   async #waitForPage(timeoutMs = 90000) {
     // Chromium can take a while after a cold boot; keep polling its devtools endpoint.
+    const host = this.host || '127.0.0.1';
+    const port = this.host ? config.usbCdpPort : config.cdpPort;
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       try {
-        const page = (await listTargets(config.cdpPort)).find((t) => t.type === 'page');
-        if (page) return page;
+        const page = (await listTargets(port, host)).find((t) => t.type === 'page');
+        if (page) {
+          if (this.host && page.webSocketDebuggerUrl) {
+            page.webSocketDebuggerUrl = page.webSocketDebuggerUrl.replace(/^ws:\/\/[^/]+/, `ws://${this.host}:${port}`);
+          }
+          return page;
+        }
       } catch {}
       if (Date.now() > deadline) throw new Error('Chromium devtools not reachable on the device');
       await new Promise((r) => setTimeout(r, 1500));
@@ -144,6 +162,7 @@ export class DeviceLink extends EventEmitter {
    */
   async setScreen(on) {
     this.send({ type: 'screen', on });
+    if (this.host || this.closed) return;
     const power = '/sys/class/aml_bl/power'; // echo 0|1 (see `cat /sys/class/aml_bl/help`)
     await shell(
       this.serial,
