@@ -114,6 +114,13 @@ The first time the Weather and Calendar screens load, macOS asks whether **Car T
 
 On community firmware with ADB, the **bridge** (`bridge/main.js`) reads Now Playing and the volume on the Mac and drives the Car Thing over USB. This fork's page keeps the clock when that bridge is not running.
 
+When the Car Thing is plugged in over USB and the Mac's **Mira** adapter is `172.16.42.1`, start the bridge from the MacThing folder. Node 22 is required for the USB debug connection and is keg-only, so put it first on `PATH` in that terminal. Stop the bridge with Ctrl-C.
+
+```bash
+export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
+npm start
+```
+
 ### Automatically at login (recommended)
 
 `npm run install-agent` installs a per-user LaunchAgent at `~/Library/LaunchAgents/com.carthing.bridge.plist`. macOS then starts the bridge when you log in and restarts it if it ever exits. There's nothing to open or keep running yourself. Unplugging, replugging or rebooting the Car Thing is handled automatically.

@@ -79,7 +79,10 @@ export class DeviceLink extends EventEmitter {
     cdp.on('close', () => this.close());
 
     await cdp.send('Runtime.enable');
-    await cdp.send('Page.enable');
+    // Chrome 69 on this device never replies to Page.enable over the USB forward.
+    // The page is already open; state is sent with Runtime.evaluate.
+    if (this.host) cdp.send('Page.enable').catch(() => {});
+    else await cdp.send('Page.enable');
     await cdp.send('Runtime.addBinding', { name: BINDING }).catch((e) => log.warn('[device] addBinding failed, using console channel', e.message));
 
     const here = (target.url || '').replace(/\/$/, '');
