@@ -1,4 +1,4 @@
-/* Shared runtime for every screen: the channel to the Mac, the device clock, screen switching,
+/* Shared runtime for every screen: the channel to the Mac, the Mac's clock, screen switching,
  * hardware input and the volume readout. Screens register with CT.screen(name) and listen for
  * bridge messages with CT.on(type, fn).
  *
@@ -48,6 +48,7 @@ export function initializeRuntime(state) {
     if (msg.type === 'bye') return setConnected(false);
     setConnected(true);
     if (msg.type === 'config') { CT.config = msg.config; gotConfig = true; restoreDevScreen(); }
+    else if (msg.type === 'tick') syncClock(msg);
     else if (msg.type === 'settings') state.settings = msg.settings;
     else if (msg.type === 'appearance') macDark = msg.dark;
     if (msg.type === 'settings' || msg.type === 'appearance') applyTheme();
@@ -66,18 +67,62 @@ export function initializeRuntime(state) {
     connected = on;
   }
 
-  // ---- Time (the device clock; Mac tick messages do not set it) -----------------------
+  // ---- Time (Mac ticks are the clock; the device's own clock is not) ----------------
+  // The Car Thing boots to a fixed date. While the Mac is connected, its ticks are the time.
+  // After they stop, keep counting from the last one. That offset is saved so a reboot, which
+  // puts the device clock back at the floor, still starts from the last Mac time.
 
-  CT.now = function () { return Date.now(); };
-  /** Minutes east of UTC. An explicit zone wins; otherwise the device zone at that instant. */
+  var CLOCK_KEY = 'ct-clock';
+  var clock = { offset: 0, tz: 0, tzKnown: false };
+  var offsets = [];
+  CT.usesMacClock = true;
+  CT.now = function () { return Date.now() + clock.offset; };
+
+  function readClock() {
+    try { return JSON.parse(localStorage.getItem(CLOCK_KEY)); } catch (e) { return null; }
+  }
+  function writeClock(macAt, deviceAt) {
+    try {
+      localStorage.setItem(CLOCK_KEY, JSON.stringify({ macAt: macAt, deviceAt: deviceAt, tz: clock.tz }));
+    } catch (e) {}
+  }
+  function restoreClock() {
+    var saved = readClock();
+    if (!saved || typeof saved.macAt !== 'number' || typeof saved.deviceAt !== 'number') return;
+    if (typeof saved.tz === 'number') { clock.tz = saved.tz; clock.tzKnown = true; }
+    var deviceNow = Date.now();
+    // A backwards jump is the floor being restored. Start again at the last Mac reading.
+    if (deviceNow + 2000 < saved.deviceAt) clock.offset = saved.macAt - deviceNow;
+    else clock.offset = saved.macAt - saved.deviceAt;
+  }
+  restoreClock();
+
+  /** Minutes east of UTC. An explicit zone wins; otherwise the Mac's, once a tick has set it. */
   function zoneMinutes(ms, tzMinutes) {
     if (tzMinutes != null) return tzMinutes;
+    if (clock.tzKnown) return clock.tz;
     return -new Date(ms).getTimezoneOffset();
+  }
+  // Each tick reaches the device a little late, and by a different amount each time, so taking
+  // every one as-is makes the clock jump back and forth by that much every two seconds — enough
+  // for a countdown to show some seconds twice. A late tick only ever makes the Mac look behind,
+  // so keep the least-delayed reading of the last fifteen (half a minute, which still follows
+  // the Mac if its clock is changed).
+  function syncClock(msg) {
+    if (typeof msg.now !== 'number') return;
+    var deviceAt = Date.now();
+    var offset = msg.now - deviceAt;
+    if (offsets.length && Math.abs(offset - clock.offset) > 10000) offsets = [];
+    offsets.push(offset);
+    if (offsets.length > 15) offsets.shift();
+    clock.offset = Math.max.apply(null, offsets);
+    if (typeof msg.tzMinutes === 'number') { clock.tz = msg.tzMinutes; clock.tzKnown = true; }
+    writeClock(msg.now, deviceAt);
   }
   CT.DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   CT.MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-  /** Calendar fields of epoch ms in a timezone (minutes east of UTC; defaults to the device's). */
+  /** Calendar fields of epoch ms in a timezone (minutes east of UTC; defaults to the Mac's). */
   CT.parts = function (ms, tzMinutes) {
     var d = new Date(ms + zoneMinutes(ms, tzMinutes) * 60000);
     return {
@@ -105,7 +150,7 @@ export function initializeRuntime(state) {
     return (h % 12 || 12) + (h < 12 ? 'AM' : 'PM');
   };
 
-  // A shared once-a-second tick, aligned to the device clock's second boundary.
+  // A shared once-a-second tick, aligned to the clock's second boundary.
   var secondFns = [];
   CT.onSecond = function (fn) { secondFns.push(fn); };
   (function secondLoop() {

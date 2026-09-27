@@ -3,6 +3,7 @@ import { config, paths } from '../config.js';
 import { log } from '../log.js';
 import { adb, shell } from './adb.js';
 import { CDP, listTargets } from './cdp.js';
+import { macClockExpression } from './mac-clock.js';
 import { isBootInstalled, syncSleepd, syncUi } from './deploy.js';
 
 const BINDING = '__carthingSend'; // page → Mac (Runtime.addBinding)
@@ -126,6 +127,22 @@ export class DeviceLink extends EventEmitter {
     }
     if (msg.type === 'hello') this.emit('ready');
     this.emit('message', msg);
+  }
+
+  /** Point an already-flashed page at Mac time. A page that does this itself is left alone. */
+  applyMacClock() {
+    if (!this.cdp || this.closed) return Promise.resolve();
+    this._clock ||= this.cdp
+      .send('Runtime.evaluate', { expression: macClockExpression, returnByValue: true })
+      .then((result) => {
+        if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'clock patch failed');
+        if (result.result?.value === 'installed') log.info('[device] clock follows the Mac');
+      })
+      .catch((err) => log.warn('[device] clock patch failed:', err.message))
+      .finally(() => {
+        this._clock = null;
+      });
+    return this._clock;
   }
 
   send(msg) {

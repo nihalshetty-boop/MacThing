@@ -10,6 +10,7 @@ export const state = reactive({
   flash: { icon: 'play', color: '', key: 0 }, toast: ''
 });
 export const CT = initializeRuntime(state);
+state.now = CT.now();
 // The art on screen only changes once its replacement is decoded, and a track that arrives
 // without art keeps the old art for a moment: players often send the new title first and its art
 // a beat later, and dropping to nothing in between flashes the stage and the ambient background.

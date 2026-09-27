@@ -1,6 +1,6 @@
 # MacThing
 
-This fork keeps [Sean Curran's MacThing](https://github.com/srcurran/MacThing) (MIT) as the Car Thing screen. The clock runs with no Mac attached. The page takes the time from the device it is running on. It does not wait for Mac tick messages, and it does not show "Waiting for your Mac" or go black when the Mac bridge is quiet.
+This fork keeps [Sean Curran's MacThing](https://github.com/srcurran/MacThing) (MIT) as the Car Thing screen. The clock follows the Mac. When the bridge is away, it keeps counting from the last Mac time instead of the device's unset clock. It does not show "Waiting for your Mac" or go black when the Mac bridge is quiet.
 
 Weather that stays on the device, and a Mac connection that works with the firmware in the sibling `mira-firmware` repo, are not done yet. The original bridge still sends Now Playing, artwork, favorites, and calendar, but only over ADB to community firmware such as Thing Labs or DeskThing. The image that `mira-firmware` builds has no `adb`.
 
@@ -285,7 +285,7 @@ this shows. If Control Center is also empty, `npm run build` self-tests the Medi
 
 - **Now Playing relies on a workaround.** Since macOS 15.4, Apple only lets its own entitled processes read MediaRemote. [ungive/mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) gets around this by running inside `/usr/bin/perl`, which Apple signs. `npm run build` self-tests it. A future macOS update could break it. An AppleScript fallback for Music.app would be the plan B, and `bridge/nowplaying/mediaremote.js` documents the interface such a source would implement.
 - **Only one source at a time.** Control Center can list several players; this shows the one macOS considers current.
-- **Browser video artwork is low resolution.** YouTube only exposes a small thumbnail, and it's centre-cropped to the square panel, so the sides of a 16:9 frame are cut off. The crop happens on the Mac at the source's own resolution, which keeps it as sharp as the thumbnail allows.
+- **Browser video artwork.** MediaRemote's thumbnail for a browser video is small. When that tab is in Chrome, Safari, or another scriptable browser, the bridge loads a larger image from the page (for YouTube, the full-size thumbnail). The square panel still centre-crops a wide frame. macOS must allow this app to control the browser.
 - **Non-Latin scripts.** The device has no CJK font, so Japanese, Chinese or Korean titles render as boxes. Adding a Noto Sans CJK subset to `ui/fonts` would fix it.
 - **Volume depends on the output device.** HDMI, S/PDIF and some USB DACs have no software volume. The screen then says "No volume control on …".
 - **Weather data.** Your location leaves the Mac rounded to about 1 km, and only to Open-Meteo. Hourly and daily labels use the forecast place's own timezone.

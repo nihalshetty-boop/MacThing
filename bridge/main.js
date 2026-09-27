@@ -15,6 +15,7 @@ import { DeviceLink } from './device/link.js';
 import { log } from './log.js';
 import { AppInfo, kindOf } from './nowplaying/apps.js';
 import { ArtworkCache } from './nowplaying/artwork.js';
+import { largerBrowserArt } from './nowplaying/browser-art.js';
 import { MediaRemoteSource } from './nowplaying/mediaremote.js';
 import { MacAppearance } from './mac/appearance.js';
 import { MacHelper } from './mac/helper.js';
@@ -59,6 +60,15 @@ async function onNowPlaying(snapshot) {
     : 'nothing playing';
   if (summary !== lastLogged) log.info(`[now playing] ${(lastLogged = summary)}`);
 
+  if (link) pushNowPlaying(link);
+  if (!art || !snapshot.artwork || Math.min(art.width || 0, art.height || 0) >= 360) return;
+  const bigger = await largerBrowserArt(snapshot.bundleId, snapshot.title);
+  if (seq !== resolveSeq || !bigger) return;
+  const mime = bigger.buf[0] === 0x89 ? 'image/png' : 'image/jpeg';
+  const hi = await artwork.get({ key: `${snapshot.artwork.key}:hi`, mime, base64: bigger.buf.toString('base64') });
+  if (seq !== resolveSeq || !hi || Math.min(hi.width || 0, hi.height || 0) < 360) return;
+  current = { np: snapshot, art: hi, app };
+  log.info(`[artwork] ${hi.width}×${hi.height} from the playing tab`);
   if (link) pushNowPlaying(link);
 }
 
@@ -341,7 +351,9 @@ async function usbDevice() {
 async function connect(device) {
   connecting = true;
   const l = new DeviceLink(device.serial, { host: device.host });
-  l.on('ready', () => pushAll(l));
+  l.on('ready', () => {
+    l.applyMacClock().then(() => pushAll(l));
+  });
   l.on('message', onDeviceMessage);
   l.on('close', () => {
     if (link !== l) return;
