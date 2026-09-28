@@ -5,21 +5,15 @@ const props = defineProps({ now: Number, numbers: Boolean });
 const light = computed(() => state.light);
 // Figma 2003:1580 (dark) and 2003:1699 (light). Assets are the exported vectors;
 // markers sit where those frames put them, then each hour is that 12 o'clock mark turned.
-const MARK = {
-  light: { tri: [33.08, 39.08], dot: [17.4, 17.4], bar: [16.6, 39.16] },
-  dark: { tri: [33.08, 39.08], dot: [17.4, 17.4], bar: [13.6, 36.16] },
-};
+const MARK = { tri: [33.08, 39.08], dot: [17.4, 17.4], bar: [16.6, 39.16] };
 const CENTER = { tri: [192, 59.808], dot: [192, 52.93], bar: [192, 60.81] };
 const marks = computed(() => {
-  const theme = light.value ? 'light' : 'dark';
-  const size = MARK[theme];
   return Array.from({ length: 12 }, (_, i) => {
     const kind = i === 0 ? 'tri' : i % 3 === 0 ? 'bar' : 'dot';
-    const [w, h] = size[kind];
+    const [w, h] = MARK[kind];
     const [cx, cy] = CENTER[kind];
-    // Triangle and dots use the light filled marks in both themes. Bars stay theme-specific.
-    const fileTheme = kind === 'bar' ? theme : 'light';
-    return { i, w, h, x: cx - w / 2, y: cy - h / 2, href: 'images/clock/mark-' + kind + '-' + fileTheme + '.svg' };
+    // Marks and hands use the light vectors in both themes: white fill, black stroke.
+    return { i, w, h, x: cx - w / 2, y: cy - h / 2, href: 'images/clock/mark-' + kind + '-light.svg' };
   });
 });
 const track = computed(() => light.value ? 'images/clock/track-light.svg' : 'images/clock/track-dark.svg');
