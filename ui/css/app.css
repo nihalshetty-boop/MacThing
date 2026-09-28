@@ -886,6 +886,45 @@ h3 {
   background: var(--text);
 }
 
+/* ===== screensaver ===== */
+/* The idle face (Figma 2003:1565 dark, 2003:1683 light): the date, the last forecast, and the
+   plain analog clock. Album art uses the same transparent panels as the other screens. */
+
+.saver-rail {
+  padding-left: 48px;
+}
+#screen-screensaver .saver-rail,
+#screen-screensaver .screen-stage {
+  background: #000;
+}
+#app.light #screen-screensaver .saver-rail,
+#app.light #screen-screensaver .screen-stage {
+  background: #f5f7fb;
+}
+#app.ambient-on #screen-screensaver .saver-rail,
+#app.ambient-on #screen-screensaver .screen-stage {
+  background: transparent;
+}
+.saver-line {
+  height: 1px;
+  background: var(--line);
+}
+.saver-temp {
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 600;
+}
+.saver-cond {
+  min-width: 0;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 500;
+}
+.saver-icon {
+  width: 24px;
+  height: 24px;
+}
+
 /* ===== clock ===== */
 /* Clock. The face (analog, numbers or digital) is a setting; ClockScreen.vue picks the markup. */
 
@@ -895,20 +934,7 @@ h3 {
   top: 48px;
   width: 384px;
   height: 384px;
-} /* 48px inset in the square */
-/* A faint minute track with the hour ticks picked out, and solid markers. */
-.c-tick {
-  stroke: var(--hand);
-  stroke-opacity: 0.2;
-  stroke-width: 2;
-}
-.c-tick.hour {
-  stroke-opacity: 1;
-}
-.c-mark {
-  fill: var(--hand);
-  stroke: none;
-}
+} /* 48px inset in the square. The dial is the Figma vectors (2003:1580 / 2003:1699). */
 .c-numerals {
   fill: var(--text);
   font-family: Merriweather, Georgia, serif;
@@ -1121,6 +1147,12 @@ h3 {
   line-height: 120px;
   font-weight: 600;
   white-space: nowrap;
+}
+/* The day number. --date is the current album art's strongest color; otherwise the theme red.
+   Album art behind the UI quiets every other accent, and leaves this one. */
+#screen-clock:not(.timer) .font-huge,
+#screen-screensaver .font-huge {
+  color: var(--date, var(--red));
 }
 .weight-light {
   font-weight: 300;

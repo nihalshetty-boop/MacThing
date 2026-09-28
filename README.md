@@ -1,6 +1,6 @@
 # MacThing
 
-This fork keeps [Sean Curran's MacThing](https://github.com/srcurran/MacThing) (MIT) as the Car Thing screen. The clock follows the Mac. When the bridge is away, it keeps counting from the last Mac time instead of the device's unset clock. It does not show "Waiting for your Mac" or go black when the Mac bridge is quiet.
+This fork keeps [Sean Curran's MacThing](https://github.com/srcurran/MacThing) (MIT) as the Car Thing screen. The clock follows the Mac. When the bridge is away, it keeps counting from the last Mac time instead of the device's unset clock, and it keeps the last forecast and the day's remaining events the same way. It does not show "Waiting for your Mac" or go black when the Mac bridge is quiet.
 
 Weather that stays on the device, and a Mac connection that works with the firmware in the sibling `mira-firmware` repo, are not done yet. The original bridge still sends Now Playing, artwork, favorites, and calendar, but only over ADB to community firmware such as Thing Labs or DeskThing. The image that `mira-firmware` builds has no `adb`.
 
@@ -53,6 +53,7 @@ The four screens:
 - **Calendar** shows today's remaining events and, by default, tomorrow's under their own heading. Choose how many days (1–7) and which calendars on the Mac settings page. Press the calendar button again while it's up to see the whole month, with today circled; press it once more to go back to the agenda.
 - **Weather** shows the current conditions, the next five hours and four days. It uses [Open-Meteo](https://open-meteo.com) (free, no account) for your Mac's location or a place you pick. Press the weather button again while it's up to list the next six hours (Today), once more for the next six days (This Week), and a third time to go back to the forecast. If the forecast can't be fetched, the weather button asks again instead; each failed try makes the next wait longer (4 seconds, then 8, 16 and so on), and the screen says how long.
 - **Clock** shows an analog face (plain or with numbers) or a digital one — pick which on the Mac settings page — plus the next event still to come today, or "No events today". Press the clock button again while the clock is up to swap in a timer: turn the knob to pick 5, 10, 15, 30, 45 or 60 minutes, press it to start or pause, and press twice to reset. The screen flashes when the time is up. Press the clock button again to go back to the clock; while the timer is running or paused, the knob still sets the volume.
+- **Screensaver** comes up after a minute with nothing pressed, or when the Mac's display sleeps. It shows the date, the last forecast, and the plain analog clock. Buttons 1–4 still open the four screens. With the album art background on, that art sits behind this face too. The backlight drops while this face is up; the next press brings it back to full for a minute.
 
 <img src="docs/weather-today-polvo.png" width="49%" alt="Weather's Today view: the next six hours"> <img src="docs/weather-week-polvo.png" width="49%" alt="Weather's This Week view: the next six days">
 
@@ -60,7 +61,7 @@ _Weather's Today and This Week views, from the same fixture data (rendered in Ch
 
 **Meeting alerts** (off by default; turn them on in Settings): at a timed event's alert, a card with its title, start and end time and location covers whatever screen is up. "Event's alert" uses the alert set on the event in Calendar (only alerts within an hour of the start; events without one are skipped); or pick a fixed 1, 5 or 10 minutes before every event. It stays until you press any button or the knob — that press only dismisses it — or until five minutes after the meeting starts (sooner if the meeting ends first). It shows one meeting at a time: when meetings overlap, the card shows the first, and one press dismisses them all. Turning the knob still sets the volume.
 
-**Sleep:** holding the settings button still turns the screen off until the next press. This fork's page does not go black just because the Mac bridge stopped. The original `device/sleepd.sh` watchdog, installed by `npm run setup-device`, still does that on ADB firmware. The Mac's own display sleep and lock behavior below still belongs to the bridge.
+**Sleep:** holding the settings button still turns the screen off until the next press. This fork's page does not go black just because the Mac bridge stopped, and the Mac's display going to sleep does not either: the screensaver comes up and the backlight drops to a low level. The next button or knob press restores full brightness for a minute (`screenWakeMs`). The original `device/sleepd.sh` watchdog, installed by `npm run setup-device`, still turns the backlight off when the Mac goes quiet on ADB firmware. Skip that if the screen should stay on. The lock screen still turns this fork's panel off.
 
 **Lock:** while your Mac is locked — the lock screen, or switched to another account — the screen stays off and no button wakes it. It comes back when you log in.
 
@@ -163,7 +164,7 @@ npm run setup-device  # only if you set the device up before the sleep watchdog 
 - `buttonClicks`: buttons that count presses the same way — by default the back button, once to favorite and twice to unfavorite
 - `volumeStep`: volume change per knob click
 - `knobDirection`: `1` matches Spotify's own mapping (turning right raises the volume); `-1` flips it
-- `sleepWithMac` and `screenWakeMs`: follow the Mac's display and lock screen, and how long a button or knob wake lasts while the Mac's display is off
+- `sleepWithMac` and `screenWakeMs`: the lock screen still turns the panel off when `sleepWithMac` is on. Display sleep and a minute with no input show the screensaver and dim the backlight; a press restores full brightness for `screenWakeMs`
 - `buttonHolds` and `holdMs`: what a held button does (`sleep` by default on the settings button) and how long the hold is. A button with a hold acts on release, so one press isn't both things
 - `deviceSleepSeconds`, `deviceWakeSeconds`, `devicePowersave`: the device's own sleep once the Mac goes quiet — how long it waits, how long an input wakes it for, and whether it also idles the CPU. Changes reach the device the next time the bridge connects (`npm run restart`)
 - `macVolumeIndicator`: see below

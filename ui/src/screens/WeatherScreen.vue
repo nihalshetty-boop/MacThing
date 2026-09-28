@@ -110,7 +110,7 @@ screen.reselect = () => {
             :key="i"
             :forecast="h"
             :current="i === 0"
-            :label="i === 0 ? 'Now' : CT.hourText(h.t, tz)"
+            :label="Math.abs(h.t - state.now) < 75 * 60 * 1000 ? 'Now' : CT.hourText(h.t, tz)"
           />
         </div>
         <div class="w-daily grid items-center">
@@ -120,7 +120,9 @@ screen.reselect = () => {
             :forecast="d"
             :current="i === 0"
             :label="
-              i === 0 ? 'Today' : CT.DAYS[CT.parts(d.t, tz).day].slice(0, 3)
+              CT.dayNumber(d.t, tz) === CT.dayNumber(state.now)
+                ? 'Today'
+                : CT.DAYS[CT.parts(d.t, tz).day].slice(0, 3)
             "
           />
         </div>

@@ -127,6 +127,7 @@ function pushAll(target) {
       buttonHolds: config.buttonHolds,
       holdMs: config.holdMs,
       offlineSleepMs: config.deviceSleepSeconds * 1000,
+      screenWakeMs: config.screenWakeMs,
       volumeStep: config.volumeStep,
       knobDirection: config.knobDirection,
       debug: Boolean(process.env.DEBUG), // page reports raw key/wheel events to the log
@@ -140,23 +141,20 @@ function pushAll(target) {
   target.send({ type: 'weather', weather: weather.state });
   target.send({ type: 'calendar', calendar: calendar.state });
   target.send({ type: 'screen', on: screenOn !== false }); // the page may have gone dark by itself
+  target.send({ type: 'display', asleep: config.sleepWithMac && power.displayAsleep });
 }
 
 // ---- Screen sleep ---------------------------------------------------------
 
-let systemAsleep = false;
-let lastDeviceInput = 0;
 let manualSleep = false; // held down the sleep button; any input clears it
 let screenOn = null; // unknown until applied to the current device link
 
-// The Car Thing's screen follows the Mac's display; a button/knob press wakes it for a while.
-// While the Mac is locked it stays off for good: what's on it is the locked-away Mac's business.
+// Holding the sleep button, or the Mac lock screen, turns the panel off. Display sleep leaves it
+// lit: the page switches to the screensaver and dims the backlight itself.
 function screenShouldBeOn() {
   if (manualSleep) return false;
-  if (!config.sleepWithMac) return true;
-  if (systemAsleep || power.locked) return false;
-  if (!power.displayAsleep) return true;
-  return Date.now() - lastDeviceInput < config.screenWakeMs;
+  if (config.sleepWithMac && power.locked) return false;
+  return true;
 }
 
 async function applyScreen() {
@@ -263,7 +261,6 @@ function checkKeyAccess(state) {
 
 function onDeviceMessage(msg) {
   if (msg.type === 'command' || msg.type === 'volume' || msg.type === 'wake') {
-    lastDeviceInput = Date.now();
     manualSleep = false;
     applyScreen();
   }
@@ -284,6 +281,8 @@ function onDeviceMessage(msg) {
       return retryWeather(msg.quiet);
     case 'log':
       return log.info('[device]', msg.message);
+    case 'brightness':
+      return link?.setBrightness(msg.level)?.catch((err) => log.warn('[screen]', err.message));
   }
 }
 
@@ -400,18 +399,21 @@ settings.on('change', (values) => link?.send({ type: 'settings', settings: value
 weather.on('change', (state) => link?.send({ type: 'weather', weather: state }));
 calendar.on('change', (state) => link?.send({ type: 'calendar', calendar: state }));
 appearance.on('change', (dark) => link?.send({ type: 'appearance', dark }));
-power.on('display', () => applyScreen());
+power.on('display', (asleep) => {
+  if (!config.sleepWithMac) return;
+  log.info(`[screen] Mac display ${asleep ? 'asleep' : 'awake'}`);
+  link?.send({ type: 'display', asleep });
+});
 power.on('lock', (locked) => {
   log.info(`[screen] Mac ${locked ? 'locked' : 'unlocked'}`);
   applyScreen();
 });
-power.on('willSleep', async () => {
-  systemAsleep = true;
-  await Promise.race([applyScreen(), new Promise((r) => setTimeout(r, 2500))]);
-  power.ack(); // let the Mac go to sleep
+power.on('willSleep', () => {
+  if (config.sleepWithMac) link?.send({ type: 'display', asleep: true });
+  power.ack(); // let the Mac go to sleep; the panel stays lit on the screensaver
 });
 power.on('didWake', () => {
-  systemAsleep = false;
+  if (config.sleepWithMac) link?.send({ type: 'display', asleep: power.displayAsleep });
   applyScreen();
   // Waking is exactly when adb's list goes stale, so look now and again once USB has settled,
   // instead of waiting out the timer that exists for ordinary unplugs.
@@ -432,7 +434,7 @@ setInterval(refreshDevices, 30 * 1000); // a stale adb server sends no events; l
 refreshDevices();
 
 setInterval(() => link?.send(tickMessage()), 2000);
-setInterval(() => applyScreen(), 5000); // lets the post-input wake window expire
+setInterval(() => applyScreen(), 5000); // lock and the held sleep button, if an event was missed
 setInterval(heartbeat, config.heartbeatMs);
 setInterval(() => link?.send(nowPlayingMessage()), 15000); // re-anchor the device's progress clock
 

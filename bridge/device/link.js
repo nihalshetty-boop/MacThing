@@ -180,6 +180,26 @@ export class DeviceLink extends EventEmitter {
    * page goes black, which looks like a dark screen in a dark room and lit everywhere else.
    * device/sleepd.sh switches the same file when the Mac isn't there to do it.
    */
+  /**
+   * Full or low backlight. The page also asks a listener on the device (127.0.0.1:4750); this is
+   * the adb path, for an image that doesn't have that listener. The standard backlight brightness
+   * file is ignored on the stock panel, so the firmware's auto_brightness service is what keeps
+   * a night level — it watches /tmp/carthing-level. Inverted scale: 1 is brightest, ~200 is low.
+   */
+  async setBrightness(level) {
+    if (level !== 'dim' && level !== 'full') return;
+    log.info(`[screen] backlight ${level}`);
+    if (this.host || this.closed) return;
+    const dim = level === 'dim';
+    await shell(
+      this.serial,
+      dim
+        ? 'echo dim > /tmp/carthing-level; supervisorctl stop backlight >/dev/null 2>&1; for f in /sys/class/backlight/*/brightness; do [ -e "$f" ] && echo 200 > "$f"; done; true'
+        : 'echo full > /tmp/carthing-level; supervisorctl start backlight >/dev/null 2>&1; true',
+      { timeout: 3000 },
+    );
+  }
+
   async setScreen(on) {
     this.send({ type: 'screen', on });
     if (this.host || this.closed) return;

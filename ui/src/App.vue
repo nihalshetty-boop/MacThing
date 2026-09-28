@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { state, artworkUrl } from './state.js';
+import { state, artworkUrl, dateColor } from './state.js';
 import Artwork from './components/Artwork.vue';
 import IconSymbols from './components/IconSymbols.vue';
 import UiProgress from './components/UiProgress.vue';
@@ -8,6 +8,7 @@ import NowPlayingScreen from './screens/NowPlayingScreen.vue';
 import CalendarScreen from './screens/CalendarScreen.vue';
 import WeatherScreen from './screens/WeatherScreen.vue';
 import ClockScreen from './screens/ClockScreen.vue';
+import ScreensaverScreen from './screens/ScreensaverScreen.vue';
 import SettingsScreen from './screens/SettingsScreen.vue';
 import MeetingAlert from './components/MeetingAlert.vue';
 const ambient = computed(() => !!(state.settings.artBackground && artworkUrl.value));
@@ -18,9 +19,9 @@ watch(() => state.current, current => { if (NOTCHED.includes(current)) notchAt.v
 </script>
 <template>
   <IconSymbols />
-  <div id="app" :data-screen="state.current" :class="{ offline: state.offline, asleep: state.asleep, light: state.light, 'ambient-on': ambient, 'show-volume': state.showVolume, 'volume-unsupported': state.volumeUnsupported }">
+  <div id="app" :data-screen="state.current" :style="dateColor ? { '--date': dateColor } : null" :class="{ offline: state.offline, asleep: state.asleep, light: state.light, 'ambient-on': ambient, 'show-volume': state.showVolume, 'volume-unsupported': state.volumeUnsupported }">
     <div v-if="ambient" class="ambient fill"><Artwork :url="artworkUrl" /></div>
-    <div class="screens fill"><NowPlayingScreen /><CalendarScreen /><WeatherScreen /><ClockScreen /><SettingsScreen /></div>
+    <div class="screens fill"><NowPlayingScreen /><CalendarScreen /><WeatherScreen /><ClockScreen /><ScreensaverScreen /><SettingsScreen /></div>
     <div class="page-notch" :class="{ on: NOTCHED.includes(state.current) }" :style="{ transform: 'translateX(' + notchAt * 201 + 'px)' }" />
     <MeetingAlert />
     <div class="volume-hud fill flex items-center gap-16">

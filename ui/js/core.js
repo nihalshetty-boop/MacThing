@@ -19,7 +19,7 @@ export function initializeRuntime(state) {
     buttonClicks: { Escape: { 1: 'favorite', 2: 'unfavorite' } },
     knobClicks: { 1: 'playpause', 2: 'next', 3: 'previous' },
     buttonHolds: { m: 'sleep' }, holdMs: 1200, offlineSleepMs: 90000,
-    multiClickMs: 350, volumeStep: 1 / 64, knobDirection: 1, debug: false
+    multiClickMs: 350, volumeStep: 1 / 64, knobDirection: 1, screenWakeMs: 60000, debug: false
   };
   Object.defineProperty(CT, 'settings', { get: function () { return state.settings; } });
 
@@ -242,7 +242,8 @@ export function initializeRuntime(state) {
   CT.on('toast', function (msg) { CT.toast(msg.text); });
 
   // ---- Screen sleep ----------------------------------------------------------------------
-  // The Mac turns the backlight off when its display sleeps, and when the sleep button is held.
+  // Holding the sleep button turns the backlight off until the next input, and so does the Mac's
+  // lock screen. Display sleep does not: that drops into the screensaver and a low backlight.
   // A missing Mac bridge leaves the screen on. While dark, the first button or knob input only wakes us.
 
   CT.asleep = false;
@@ -251,6 +252,55 @@ export function initializeRuntime(state) {
     state.asleep = on;
   }
   CT.on('screen', function (msg) { setAsleep(!msg.on); });
+
+  // ---- Night face -----------------------------------------------------------------------
+  // After a minute with no button or knob input, or as soon as the Mac's display sleeps, show
+  // the screensaver and drop the backlight. A press brings full brightness back for that same
+  // minute. Holding the sleep button still turns the panel fully off; that path is setAsleep.
+
+  var displayAsleep = false;
+  var lastInput = performance.now();
+  var brightUntil = 0;
+
+  function nightMs() { return CT.config.screenWakeMs || 60000; }
+
+  function applyBrightness(level) {
+    CT.send({ type: 'brightness', level: level });
+    // The page runs on the device, so this reaches the backlight even when the Mac has no shell.
+    try {
+      var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      var timer = ctrl && setTimeout(function () { ctrl.abort(); }, 1500);
+      fetch('http://127.0.0.1:4750/' + level, { mode: 'no-cors', signal: ctrl && ctrl.signal })
+        .catch(function () {})
+        .then(function () { clearTimeout(timer); });
+    } catch (e) {}
+  }
+
+  function enterNight() {
+    if (CT.asleep || state.dim || !CT.screens.screensaver) return;
+    state.dim = true;
+    if (CT.current !== 'screensaver') CT.show('screensaver');
+    applyBrightness('dim');
+  }
+
+  function noteInput() {
+    lastInput = performance.now();
+    brightUntil = lastInput + nightMs();
+    if (!state.dim) return;
+    state.dim = false;
+    applyBrightness('full');
+  }
+
+  function considerNight() {
+    if (CT.asleep || performance.now() < brightUntil) return;
+    if (displayAsleep || performance.now() - lastInput >= nightMs()) enterNight();
+  }
+
+  CT.on('display', function (msg) {
+    displayAsleep = !!msg.asleep;
+    considerNight();
+  });
+  setInterval(considerNight, 1000);
 
   /** Holding the sleep button: the Mac turns the backlight off until the next input. */
   function sleepNow() {
@@ -369,9 +419,11 @@ export function initializeRuntime(state) {
       debugInput('no keyup seen — holds disabled');
     }
     if (wakeInstead()) {
+      noteInput();
       holds[key] = { start: performance.now(), done: true }; // the wake was the whole press
       return;
     }
+    noteInput();
     // An alert over the screen (the meeting alert) takes the whole press to dismiss it.
     if (CT.dismissModal && CT.dismissModal()) {
       holds[key] = { start: performance.now(), done: true };
@@ -400,7 +452,9 @@ export function initializeRuntime(state) {
     e.preventDefault();
     var d = e.deltaX || e.deltaY;
     debugInput('wheel dx=' + e.deltaX + ' dy=' + e.deltaY);
-    if (!d || wakeInstead()) return;
+    if (!d) return;
+    if (wakeInstead()) { noteInput(); return; }
+    noteInput();
     var steps = (d > 0 ? 1 : -1) * (CT.config.knobDirection || 1);
     var screen = CT.screens[CT.current];
     if (!screen.turn || screen.turn(steps) === false) onKnobVolume(steps);
