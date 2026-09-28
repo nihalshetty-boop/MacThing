@@ -19,12 +19,11 @@ const marks = computed(() => {
 const track = computed(() => light.value ? 'images/clock/track-light.svg' : 'images/clock/track-dark.svg');
 const handStroke = '#222222';
 const hubFill = '#111111';
-// Hands from the frame, drawn at its sample time. Counter-rotate that pose so
-// zero degrees is 12, then the live angle is applied around the hub at the dial center.
-const HOUR_D = 'M8.47192 38.3764L1.94692 47.8703C1.04601 49.1812 1.37831 50.9742 2.68915 51.8751L86.5522 109.513C87.8631 110.413 89.6561 110.081 90.557 108.77L97.082 99.2764C97.9829 97.9656 97.6506 96.1726 96.3397 95.2717L12.4767 37.6342C11.1658 36.7333 9.37283 37.0656 8.47192 38.3764Z';
-const MINUTE_D = 'M213.39 7.28742L210.004 2.62748C209.069 1.34068 207.268 1.05542 205.982 1.99034L72.3967 99.0454C71.1099 99.9803 70.8246 101.781 71.7595 103.068L75.1451 107.728C76.0801 109.015 77.8811 109.3 79.1679 108.365L212.753 11.3102C214.04 10.3753 214.325 8.57423 213.39 7.28742Z';
-const HUB_D = 'M84.3254 113.498C93.162 113.498 100.325 106.335 100.325 97.4983C100.325 88.6618 93.162 81.4983 84.3254 81.4983C75.4889 81.4983 68.3254 88.6618 68.3254 97.4983C68.3254 106.335 75.4889 113.498 84.3254 113.498Z';
-const TO_DIAL = 'translate(107.6746 94.5017)';
+// The frame draws both hands at one sample time. These are those same vectors, moved so
+// the hub is the dial center and each hand points at 12. The only rotation left is the time.
+const HOUR_D = 'M203.499 96.517L192.000 95.827C190.412 95.732 189.048 96.942 188.953 98.530L182.858 200.107C182.763 201.695 183.973 203.059 185.561 203.154L197.060 203.844C198.647 203.940 200.012 202.730 200.107 201.142L206.202 99.565C206.297 97.977 205.087 96.613 203.499 96.517Z';
+const MINUTE_D = 'M192.000 34.534L186.241 34.639C184.650 34.668 183.385 35.981 183.414 37.571L186.434 202.663C186.463 204.254 187.776 205.519 189.366 205.490L195.125 205.385C196.716 205.356 197.981 204.043 197.952 202.453L194.932 37.360C194.903 35.770 193.590 34.504 192.000 34.534Z';
+const HUB_D = 'M192.000 208.000C200.837 208.000 208.000 200.837 208.000 192.000C208.000 183.163 200.837 176.000 192.000 176.000C183.163 176.000 176.000 183.163 176.000 192.000C176.000 200.837 183.163 208.000 192.000 208.000Z';
 function point(r, turns) {
   const angle = turns * 2 * Math.PI;
   return { x: 192 + r * Math.sin(angle), y: 192 - r * Math.cos(angle) };
@@ -50,15 +49,11 @@ const angles = computed(() => {
     </g>
     <g v-else class="c-numerals"><text v-for="n in numerals" :key="n.n" :x="n.x" :y="n.y + 10" text-anchor="middle">{{ n.n }}</text></g>
     <g :transform="'rotate(' + angles.hour + ' 192 192)'">
-      <g transform="rotate(-54.722 192 192)">
-        <path :d="HOUR_D" :transform="TO_DIAL" fill="#ffffff" :stroke="handStroke" stroke-width="2.88" />
-      </g>
+      <path :d="HOUR_D" fill="#ffffff" :stroke="handStroke" stroke-width="2.88" />
     </g>
     <g :transform="'rotate(' + angles.minute + ' 192 192)'">
-      <g transform="rotate(-54.487 192 192)">
-        <path :d="MINUTE_D" :transform="TO_DIAL" fill="#ffffff" :stroke="handStroke" stroke-width="2.88" />
-      </g>
+      <path :d="MINUTE_D" fill="#ffffff" :stroke="handStroke" stroke-width="2.88" />
     </g>
-    <path :d="HUB_D" :transform="TO_DIAL" :fill="hubFill" :stroke="handStroke" stroke-width="2.88" />
+    <path :d="HUB_D" :fill="hubFill" :stroke="handStroke" stroke-width="2.88" />
   </svg>
 </template>
