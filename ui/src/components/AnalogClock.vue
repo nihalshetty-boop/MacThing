@@ -6,8 +6,8 @@ const light = computed(() => state.light);
 // Figma 2003:1580 (dark) and 2003:1699 (light). Assets are the exported vectors;
 // markers sit where those frames put them, then each hour is that 12 o'clock mark turned.
 const MARK = {
-  light: { tri: [33.08, 39.08], dot: [17.4, 17.4], bar: [16, 38.56] },
-  dark: { tri: [30.08, 36.08], dot: [14.4, 14.4], bar: [16, 38.56] },
+  light: { tri: [33.08, 39.08], dot: [17.4, 17.4], bar: [16.6, 39.16] },
+  dark: { tri: [33.08, 39.08], dot: [17.4, 17.4], bar: [13.6, 36.16] },
 };
 const CENTER = { tri: [192, 59.808], dot: [192, 52.93], bar: [192, 60.81] };
 const marks = computed(() => {
@@ -17,12 +17,14 @@ const marks = computed(() => {
     const kind = i === 0 ? 'tri' : i % 3 === 0 ? 'bar' : 'dot';
     const [w, h] = size[kind];
     const [cx, cy] = CENTER[kind];
-    return { i, w, h, x: cx - w / 2, y: cy - h / 2, href: 'images/clock/mark-' + kind + '-' + theme + '.svg' };
+    // Triangle and dots use the light filled marks in both themes. Bars stay theme-specific.
+    const fileTheme = kind === 'bar' ? theme : 'light';
+    return { i, w, h, x: cx - w / 2, y: cy - h / 2, href: 'images/clock/mark-' + kind + '-' + fileTheme + '.svg' };
   });
 });
 const track = computed(() => light.value ? 'images/clock/track-light.svg' : 'images/clock/track-dark.svg');
-const handStroke = computed(() => light.value ? '#222222' : '#B9B9B9');
-const hubFill = computed(() => light.value ? '#111111' : '#ffffff');
+const handStroke = '#222222';
+const hubFill = '#111111';
 // Hands from the frame, drawn at its sample time. Counter-rotate that pose so
 // zero degrees is 12, then the live angle is applied around the hub at the dial center.
 const HOUR_D = 'M8.47192 38.3764L1.94692 47.8703C1.04601 49.1812 1.37831 50.9742 2.68915 51.8751L86.5522 109.513C87.8631 110.413 89.6561 110.081 90.557 108.77L97.082 99.2764C97.9829 97.9656 97.6506 96.1726 96.3397 95.2717L12.4767 37.6342C11.1658 36.7333 9.37283 37.0656 8.47192 38.3764Z';
